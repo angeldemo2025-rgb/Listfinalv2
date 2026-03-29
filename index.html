@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Caminos PRO</title>
+
+<style>
+body{font-family:Arial;background:#f1f5f9;padding:15px}
+h1{text-align:center}
+
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.card{
+  background:white;
+  padding:12px;
+  margin:8px 0;
+  border-radius:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.extra{border-left:5px solid green}
+
+input{
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+}
+
+button{
+  padding:8px 10px;
+  border:none;
+  border-radius:8px;
+  background:#2563eb;
+  color:white;
+}
+
+.fab{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:65px;
+  height:65px;
+  border-radius:50%;
+  background:#2563eb;
+  color:white;
+  font-size:32px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+</style>
+</head>
+
+<body>
+
+<div class="top">
+  <h1>El Caminos</h1>
+  <button id="backBtn" onclick="history.back()">⬅️</button>
+</div>
+
+<h3 id="modeText"></h3>
+
+<input id="itemName" placeholder="Artículo">
+
+<button id="shareBtn" onclick="share()">📤 Compartir</button>
+
+<div id="list"></div>
+
+<div class="fab" onclick="fab()">+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// 🔥 TU FIREBASE
+const firebaseConfig = {
+  apiKey: "AIzaSyD0HNFfvNqjYMspNtNFgRxy2segtsRspGo",
+  authDomain: "t3-2-1a478.firebaseapp.com",
+  projectId: "t3-2-1a478",
+  storageBucket: "t3-2-1a478.firebasestorage.app",
+  messagingSenderId: "260103217483",
+  appId: "1:260103217483:web:961c5bdc464067ed06c8ce"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// 🔗 MODO DESDE LINK
+function getMode(){
+  const params = new URLSearchParams(window.location.search);
+  return params.get("mode") || "creator";
+}
+
+let mode = getMode();
+let items = [];
+let extras = [];
+
+// UI SEGÚN MODO
+function setupUI(){
+  document.getElementById("modeText").innerText = "Modo: " + mode;
+
+  document.getElementById("backBtn").style.display =
+    (mode==="creator") ? "inline-block" : "none";
+
+  document.getElementById("shareBtn").style.display =
+    (mode==="viewer") ? "none" : "inline-block";
+
+  document.getElementById("itemName").style.display =
+    (mode==="creator") ? "block" : "none";
+}
+
+// GUARDAR
+async function save(){
+  await setDoc(doc(db,"lists","main"),{items,extras});
+}
+
+// CARGAR
+async function load(){
+  const snap = await getDoc(doc(db,"lists","main"));
+  if(snap.exists()){
+    const data = snap.data();
+    items = data.items || [];
+    extras = data.extras || [];
+  }
+  render();
+}
+
+// BOTÓN +
+window.fab = async ()=>{
+  if(mode==="creator"){
+    const name = document.getElementById("itemName").value;
+    if(!name) return;
+    items.push({name,qty:""});
+    document.getElementById("itemName").value="";
+  }
+
+  if(mode==="filler"){
+    if(extras.length>=5) return alert("Máximo 5 extras");
+    const name = prompt("Nuevo artículo:");
+    if(!name) return;
+    extras.push({name,qty:""});
+  }
+
+  if(mode==="viewer") return;
+
+  await save();
+  render();
+};
+
+// ACTUALIZAR
+window.updateQty = async (arr,i,val)=>{
+  if(mode!=="filler") return;
+  arr[i].qty = val;
+  await save();
+};
+
+// ELIMINAR
+window.del = async (i)=>{
+  if(mode!=="creator") return;
+  items.splice(i,1);
+  await save();
+  render();
+};
+
+// COMPARTIR
+window.share = ()=>{
+  if(mode==="viewer") return;
+
+  let text="El Caminos\n\n";
+
+  items.forEach(i=>{
+    text+=`${i.name} (${i.qty})\n`;
+  });
+
+  if(extras.length){
+    text+="\nExtras:\n";
+    extras.forEach(i=>{
+      text+=`${i.name} (${i.qty})\n`;
+    });
+  }
+
+  window.open("https://wa.me/?text="+encodeURIComponent(text));
+};
+
+// RENDER
+function render(){
+  const div=document.getElementById("list");
+  div.innerHTML="";
+
+  items.forEach((item,i)=>{
+    const d=document.createElement("div");
+    d.className="card";
+
+    if(mode==="creator"){
+      d.innerHTML=`${item.name} <button onclick="del(${i})">❌</button>`;
+    }
+
+    if(mode==="filler"){
+      d.innerHTML=`
+        ${item.name}
+        <input type="number" value="${item.qty}" onchange="updateQty(items,${i},this.value)">
+      `;
+    }
+
+    if(mode==="viewer"){
+      d.innerHTML=`${item.name} (${item.qty})`;
+    }
+
+    div.appendChild(d);
+  });
+
+  extras.forEach((item,i)=>{
+    const d=document.createElement("div");
+    d.className="card extra";
+
+    if(mode==="filler"){
+      d.innerHTML=`
+        EXTRA: ${item.name}
+        <input type="number" value="${item.qty}" onchange="updateQty(extras,${i},this.value)">
+      `;
+    }
+
+    if(mode==="viewer"){
+      d.innerHTML=`EXTRA: ${item.name} (${item.qty})`;
+    }
+
+    div.appendChild(d);
+  });
+}
+
+// INICIO
+setupUI();
+load();
+
+</script>
+
+</body>
+</html>
